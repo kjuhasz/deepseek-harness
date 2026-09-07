@@ -67,6 +67,13 @@ export interface ConnectionStateSource {
   subscribe(listener: () => void): () => void
 }
 
+
+/** Plugin config: trusted non-loopback authorities from the web runtime. */
+export interface Config {
+  /** LAN IP literals and explicit --trusted-host authorities. */
+  trustedHosts?: readonly string[]
+}
+
 /** Required services (none — this is the wire root). */
 export const inject: string[] = []
 
@@ -177,7 +184,7 @@ function watchBrowserNetwork(controller: ConnectionController): () => void {
  * Client plugin body: pick physical carriers by page mode and provide ctx.connection.
  * @param ctx - client cordis context.
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: Config = {}): void {
   const pageLocation = typeof location === 'undefined' ? undefined : location
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureRpc = fixture ? createFixtureConnectionRpc() : undefined
@@ -221,7 +228,12 @@ export function apply(ctx: Context): void {
     publishState(undefined)
   }
   const handle: ConnectionHandle = {
-    isLoopback: transport?.ownsHost === true || pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
+    isLoopback: transport?.ownsHost === true
+      || pageLocation === undefined
+      || isLoopbackHostname(pageLocation.hostname)
+      || (config.trustedHosts && config.trustedHosts.some(
+        entry => pageLocation && new URL(`http://${entry}`).hostname === pageLocation.hostname,
+      )),
     generation: {
       getSnapshot: () => generation,
       subscribe: (listener) => {
